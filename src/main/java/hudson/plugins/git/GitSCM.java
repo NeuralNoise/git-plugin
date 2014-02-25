@@ -839,15 +839,24 @@ public class GitSCM extends GitSCMBackwardCompatibility {
             log.println("Cloning the remote Git repository");
 
             RemoteConfig rc = repos.get(0);
-            try {
-                CloneCommand cmd = git.clone_().url(rc.getURIs().get(0).toPrivateString()).repositoryName(rc.getName());
-                for (GitSCMExtension ext : extensions) {
-                    ext.decorateCloneCommand(this, build, git, listener, cmd);
+            final int MAX_TRIES = 10;
+            final int WAIT_SECONDS = 30;
+            for (int tries = 0, boolean success = false; !success && (tries < MAX_TRIES); tries++) {
+                try {
+                    CloneCommand cmd = git.clone_().url(rc.getURIs().get(0).toPrivateString()).repositoryName(rc.getName());
+                    for (GitSCMExtension ext : extensions) {
+                        ext.decorateCloneCommand(this, build, git, listener, cmd);
+                    }
+                    cmd.execute();
+                    success = true;
+                } catch (GitException ex) {
+                    if (tries < MAX_TRIES) {
+                        Thread.sleep(WAIT_SECONDS * 1000);
+                    } else {
+                        ex.printStackTrace(listener.error("Error cloning remote repo '%s'", rc.getName()));
+                        throw new AbortException();
+                    }
                 }
-                cmd.execute();
-            } catch (GitException ex) {
-                ex.printStackTrace(listener.error("Error cloning remote repo '%s'", rc.getName()));
-                throw new AbortException();
             }
         }
 
